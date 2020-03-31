@@ -73,7 +73,8 @@ public class ElasticSearchConsumer {
         properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         properties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         properties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"); // earliest - reads from the beginning or latest since the last change
-
+        properties.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false"); // disable auto commit of offsets
+        properties.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "5"); // disable auto commit of offsets
         //create consumer
 
         KafkaConsumer<String, String> consumer = new KafkaConsumer<String, String>(properties);
@@ -104,6 +105,9 @@ public class ElasticSearchConsumer {
             ConsumerRecords<String, String> records =
                     consumer.poll(Duration.ofMillis(100)); //duration
 
+            Integer recordCount = records.count();
+            logger.info("Received " + recordCount + " records");
+
             for (ConsumerRecord<String, String> record : records) {
                 //inserting data into elastic search
 
@@ -114,7 +118,7 @@ public class ElasticSearchConsumer {
              /* String jsonString =  record.value(); // or tweet
 
                 IndexRequest indexRequest = new IndexRequest(
-                        "twitter"
+                        "twitter","type", id //depreciated
                 ).source(jsonString, XContentType.JSON);*/
 
                 IndexRequest indexRequest = new IndexRequest("twitter")
@@ -128,10 +132,18 @@ public class ElasticSearchConsumer {
                 }
 
                 try {
-                    Thread.sleep(1000); // every tweet per second
+                    Thread.sleep(10); // every tweet per second
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
+            }
+            logger.info("Committing offsets...");
+            consumer.commitSync();
+            logger.info("Offsets have been committed");
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
         }
 
