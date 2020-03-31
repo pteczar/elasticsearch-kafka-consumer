@@ -1,6 +1,7 @@
 package com.github.pteczar.kafka.elasticsearch_consumer;
 
 
+import com.google.gson.JsonParser;
 import org.apache.http.HttpHost;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.UsernamePasswordCredentials;
@@ -23,7 +24,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.lang.reflect.Array;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Properties;
@@ -80,6 +80,15 @@ public class ElasticSearchConsumer {
         consumer.subscribe(Arrays.asList(topic));
         return consumer;
 
+
+        }
+        private static JsonParser jsonParser = new JsonParser();
+        private static String extractIdFromTweet(String tweetJson){
+        //gson from google
+        return jsonParser.parse(tweetJson)
+                .getAsJsonObject()
+                .get("id_str")
+                .getAsString();
     }
 
     public static void main(String[] args) throws IOException {
@@ -97,17 +106,29 @@ public class ElasticSearchConsumer {
 
             for (ConsumerRecord<String, String> record : records) {
                 //inserting data into elastic search
-              String jsonString =  record.value(); // or tweet
+
+                try {
+                String id = extractIdFromTweet(record.value());
+
+
+             /* String jsonString =  record.value(); // or tweet
 
                 IndexRequest indexRequest = new IndexRequest(
                         "twitter"
-                ).source(jsonString, XContentType.JSON);
+                ).source(jsonString, XContentType.JSON);*/
+
+                IndexRequest indexRequest = new IndexRequest("twitter")
+                        .source(record.value(), XContentType.JSON)
+                        .id(id);
 
                 IndexResponse indexResponse = client.index(indexRequest, RequestOptions.DEFAULT);
-                String id = indexResponse.getId();
-                logger.info(id);
+                logger.info(indexResponse.getId());
+                } catch (NullPointerException e){
+                    logger.warn("skipping bad data: " + record.value());
+                }
+
                 try {
-                    Thread.sleep(1000);
+                    Thread.sleep(1000); // every tweet per second
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
